@@ -332,7 +332,6 @@ func (s *jetSubscriptionsSupervisor) subscribe(ctx context.Context, channel even
 	}
 
 	ch := getJetStreamSubject(channel)
-	//sub := subscription.String()
 
 	s.natsConnMux.Lock()
 	currentNatssConn := s.natsConn
@@ -348,11 +347,13 @@ func (s *jetSubscriptionsSupervisor) subscribe(ctx context.Context, channel even
 	}
 
 	subscriber := &jsmcloudevents.RegularSubscriber{}
-	natssSub, err := subscriber.Subscribe(jsm, ch, mcb)
+	natssSub, err := subscriber.Subscribe(jsm, ch, func(msg *nats.Msg) {
+		go mcb(msg)
+	})
 	s.logger.Sugar().Infof("====nats jetstream subject %s", ch)
 	if err != nil {
 		s.logger.Error(" Create new NATS JetStream Subscription failed: ", zap.Error(err))
-		if err.Error() == stan.ErrConnectionClosed.Error() {
+		if errors.Is(err, nats.ErrConnectionClosed) {
 			s.logger.Error("Connection to NATS JetStream has been lost, attempting to reconnect.")
 			// Informing subscriptionsSupervisor to re-establish connection to NATS
 			s.signalReconnect()
